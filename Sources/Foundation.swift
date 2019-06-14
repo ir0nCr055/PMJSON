@@ -280,7 +280,157 @@ extension JSON {
         /// Thrown when a dictionary has a key that is not a string.
         case nonStringKey
     }
-    
+
+#else // Linux
+
+extension JSON {
+    /// Converts a JSON-compatible Foundation object into a `JSON` value.
+    /// - Throws: `JSONFoundationError` if the object is not JSON-compatible.
+    public init(foundation: Any) throws {
+        let object = foundation as AnyObject
+        switch object {
+        case let b as Bool:
+            self = .bool(b)
+        case is NSNull:
+            self = .null
+        case let d as NSDecimalNumber:
+            throw JSONFoundationError.incompatibleType
+            //self = .decimal(d.decimalValue)
+        case let n as NSNumber:
+            let typeChar: UnicodeScalar
+            let objCType = n.objCType
+            if objCType[0] == 0 || objCType[1] != 0 {
+                typeChar = "?"
+            } else {
+                typeChar = UnicodeScalar(UInt8(bitPattern: objCType[0]))
+            }
+            switch typeChar {
+            case "c", "i", "s", "l", "q", "C", "I", "S", "L", "B":
+                self = .int64(n.int64Value)
+            case "Q": // unsigned long long
+                let val = n.uint64Value
+                if val > UInt64(Int64.max) {
+                    fallthrough
+                }
+                self = .int64(Int64(val))
+            default:
+                self = .double(n.doubleValue)
+            }
+        case let u as UInt:
+            self = .int64(Int64(u))
+        case let u32 as UInt32:
+            self = .int64(Int64(u32))
+        case let u64 as UInt64:
+            if u64 > UInt64(Int64.max) {
+                self = .double(Double(u64))
+            }
+            else {
+                self = .int64(Int64(u64))
+            }
+        case let i as Int:
+            self = .int64(Int64(i))
+        case let i32 as Int32:
+            self = .int64(Int64(i32))
+        case let i64 as Int64:
+            self = .int64(i64)
+        case let d as Double:
+            self = .double(d)
+        case let s as String:
+            self = .string(s)
+        case let dict as NSDictionary:
+            var obj: [String: JSON] = Dictionary(minimumCapacity: dict.count)
+            for (key, value) in dict {
+                guard let key = key as? String else { throw JSONFoundationError.nonStringKey }
+                obj[key] = try JSON(foundation: value)
+            }
+            self = .object(JSONObject(obj))
+        case let swiftDict as [String:Any]:
+            var obj: [String: JSON] = Dictionary(minimumCapacity: swiftDict.count)
+            for (key, value) in swiftDict {
+                obj[key] = try JSON(foundation: value)
+            }
+            self = .object(JSONObject(obj))
+        case let array as NSArray:
+            var ary: JSONArray = []
+            ary.reserveCapacity(array.count)
+            for elt in array {
+                ary.append(try JSON(foundation: elt))
+            }
+            self = .array(ary)
+        case let swiftArray as [Any]:
+            var ary: JSONArray = []
+            ary.reserveCapacity(swiftArray.count)
+            for elt in swiftArray {
+                ary.append(try JSON(foundation: elt))
+            }
+            self = .array(ary)
+        default:
+            throw JSONFoundationError.incompatibleType
+        }
+    }
+
+    /// Returns the JSON as a JSON-compatible Foundation object.
+    public var foundation: Any {
+        switch self {
+        case .null: return NSNull()
+        case .bool(let b): return b
+        case .string(let s): return s
+        case .int64(let i): return i
+        case .double(let d): return d
+        case .decimal(let d): return NSDecimalNumber(decimal: d) // Should this be here?
+        case .object(let obj): return obj.foundation
+        case .array(let ary):
+            return ary.map({$0.foundation})
+        }
+    }
+
+    /// Returns the JSON as a JSON-compatible Foundation object, discarding any nulls.
+    public var foundationNoNull: Any? {
+        switch self {
+        case .null: return nil
+        case .bool(let b): return b
+        case .string(let s): return s
+        case .int64(let i): return i
+        case .double(let d): return d
+        case .decimal(let d): return d // Is this needed?
+        case .object(let obj): return obj.foundationNoNull
+        case .array(let ary):
+            return ary.compactMap({$0.foundationNoNull})
+        }
+    }
+}
+
+extension JSONObject {
+    /// Returns the JSON as a JSON-compatible dictionary.
+    public var foundation: [String: Any] {
+        var dict: [String: Any] = Dictionary(minimumCapacity: count)
+        for (key, value) in self {
+            dict[key] = value.foundation
+        }
+        return dict
+    }
+
+    /// Returns the JSON as a JSON-compatible dictionary, discarding any nulls.
+    public var foundationNoNull: [String: Any] {
+        var dict: [String: Any] = Dictionary(minimumCapacity: count)
+        for (key, value) in self {
+            if let value = value.foundationNoNull {
+                dict[key] = value
+            }
+        }
+        return dict
+    }
+}
+
+/// An error that is thrown when converting from `AnyObject` to `JSON`.
+/// - SeeAlso: `JSON.init(ns:)`
+public enum JSONFoundationError: Error {
+    /// Thrown when a non-JSON-compatible type is found.
+    case incompatibleType
+    /// Thrown when a dictionary has a key that is not a string.
+    case nonStringKey
+}
+
 #endif // os(iOS) || os(OSX) || os(watchOS) || os(tvOS)
 
 // MARK: - Errors
