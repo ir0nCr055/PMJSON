@@ -289,33 +289,8 @@ extension JSON {
     public init(foundation: Any) throws {
         let object = foundation as AnyObject
         switch object {
-        case let b as Bool:
-            self = .bool(b)
         case is NSNull:
             self = .null
-        case let d as NSDecimalNumber:
-            throw JSONFoundationError.incompatibleType
-            //self = .decimal(d.decimalValue)
-        case let n as NSNumber:
-            let typeChar: UnicodeScalar
-            let objCType = n.objCType
-            if objCType[0] == 0 || objCType[1] != 0 {
-                typeChar = "?"
-            } else {
-                typeChar = UnicodeScalar(UInt8(bitPattern: objCType[0]))
-            }
-            switch typeChar {
-            case "c", "i", "s", "l", "q", "C", "I", "S", "L", "B":
-                self = .int64(n.int64Value)
-            case "Q": // unsigned long long
-                let val = n.uint64Value
-                if val > UInt64(Int64.max) {
-                    fallthrough
-                }
-                self = .int64(Int64(val))
-            default:
-                self = .double(n.doubleValue)
-            }
         case let u as UInt:
             self = .int64(Int64(u))
         case let u32 as UInt32:
@@ -337,6 +312,8 @@ extension JSON {
             self = .double(d)
         case let s as String:
             self = .string(s)
+        case let b as Bool:
+            self = .bool(b)
         case let dict as NSDictionary:
             var obj: [String: JSON] = Dictionary(minimumCapacity: dict.count)
             for (key, value) in dict {
@@ -364,6 +341,29 @@ extension JSON {
                 ary.append(try JSON(foundation: elt))
             }
             self = .array(ary)
+        case let d as NSDecimalNumber:
+            throw JSONFoundationError.incompatibleType
+                //self = .decimal(d.decimalValue)
+        case let n as NSNumber:
+            let typeChar: UnicodeScalar
+            let objCType = n.objCType
+            if objCType[0] == 0 || objCType[1] != 0 {
+                typeChar = "?"
+            } else {
+                typeChar = UnicodeScalar(UInt8(bitPattern: objCType[0]))
+            }
+            switch typeChar {
+            case "c", "i", "s", "l", "q", "C", "I", "S", "L", "B":
+                self = .int64(n.int64Value)
+            case "Q": // unsigned long long
+                let val = n.uint64Value
+                if val > UInt64(Int64.max) {
+                    fallthrough
+                }
+                self = .int64(Int64(val))
+            default:
+                self = .double(n.doubleValue)
+            }
         default:
             throw JSONFoundationError.incompatibleType
         }
