@@ -314,26 +314,12 @@ extension JSON {
             self = .string(s)
         case let b as Bool:
             self = .bool(b)
-        case let dict as NSDictionary:
-            var obj: [String: JSON] = Dictionary(minimumCapacity: dict.count)
-            for (key, value) in dict {
-                guard let key = key as? String else { throw JSONFoundationError.nonStringKey }
-                obj[key] = try JSON(foundation: value)
-            }
-            self = .object(JSONObject(obj))
         case let swiftDict as [String:Any]:
             var obj: [String: JSON] = Dictionary(minimumCapacity: swiftDict.count)
             for (key, value) in swiftDict {
                 obj[key] = try JSON(foundation: value)
             }
             self = .object(JSONObject(obj))
-        case let array as NSArray:
-            var ary: JSONArray = []
-            ary.reserveCapacity(array.count)
-            for elt in array {
-                ary.append(try JSON(foundation: elt))
-            }
-            self = .array(ary)
         case let swiftArray as [Any]:
             var ary: JSONArray = []
             ary.reserveCapacity(swiftArray.count)
@@ -341,29 +327,6 @@ extension JSON {
                 ary.append(try JSON(foundation: elt))
             }
             self = .array(ary)
-        case let d as NSDecimalNumber:
-            throw JSONFoundationError.incompatibleType
-                //self = .decimal(d.decimalValue)
-        case let n as NSNumber:
-            let typeChar: UnicodeScalar
-            let objCType = n.objCType
-            if objCType[0] == 0 || objCType[1] != 0 {
-                typeChar = "?"
-            } else {
-                typeChar = UnicodeScalar(UInt8(bitPattern: objCType[0]))
-            }
-            switch typeChar {
-            case "c", "i", "s", "l", "q", "C", "I", "S", "L", "B":
-                self = .int64(n.int64Value)
-            case "Q": // unsigned long long
-                let val = n.uint64Value
-                if val > UInt64(Int64.max) {
-                    fallthrough
-                }
-                self = .int64(Int64(val))
-            default:
-                self = .double(n.doubleValue)
-            }
         default:
             throw JSONFoundationError.incompatibleType
         }
