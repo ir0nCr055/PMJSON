@@ -21,7 +21,8 @@ import struct Foundation.Decimal
 public final class JSONEncoderTests: XCTestCase {
     public static let allLinuxTests = [
         ("testDecimalEncoding", testDecimalEncoding),
-        ("testEncodeAsData", testEncodeAsData)
+        ("testEncodeAsData", testEncodeAsData),
+        ("testFoundationRoundTrip", testFoundationRoundTrip)
     ]
     
     func testDecimalEncoding() {
@@ -44,6 +45,84 @@ public final class JSONEncoderTests: XCTestCase {
         helper(["long string": .string(String(repeating: "A", count: 33 * 1024))])
         // Whole JSON string is multiple chunks
         helper(["array": .array(JSONArray(repeating: "hello", count: 32 * 1024))])
+    }
+
+    func testFoundationRoundTrip() {
+        var foundationObject = [String:Any]()
+        foundationObject["values"] = ["size": 0,
+                                      "volume": 1,
+                                      "circumference": 0,
+                                      "isFull": false,
+                                      "isEmpty": true]
+
+        //Encode
+        var jsonData: Data? = nil
+        var jsonDataRef: Data? = nil
+        do {
+            let interJSONRep = try JSON(foundation: foundationObject)
+            jsonData = JSON.encodeAsData(interJSONRep)
+        } catch {
+            print("Couldn't serialize object due to error: \(error). (Object: \(String(describing: foundationObject)))")
+            XCTFail()
+        }
+
+        if JSONSerialization.isValidJSONObject(foundationObject) {
+            do {
+                jsonDataRef = try JSONSerialization.data(withJSONObject: foundationObject)
+            } catch {
+                print("Couldn't serialize object due to error: \(error). (Object: \(String(describing: foundationObject)))")
+                XCTFail()
+            }
+        }
+
+        if jsonData != jsonDataRef {
+            var newJSONDataString = "null"
+            if let jsonDataUW = jsonData {
+                newJSONDataString = String(data: jsonDataUW, encoding: .utf8) ?? "Bad UTF8 Data"
+            }
+            var refJSONDataString = "null"
+            if let refJSONDataUW = jsonDataRef {
+                refJSONDataString = String(data: refJSONDataUW, encoding: .utf8) ?? "Bad UTF8 Data"
+            }
+            print("New JSON Data:\n\(newJSONDataString)\n\nReference JSON Data:\n\(refJSONDataString))")
+            XCTFail()
+        }
+        else {
+            var newJSONDataString = "null"
+            if let jsonDataUW = jsonData {
+                newJSONDataString = String(data: jsonDataUW, encoding: .utf8) ?? "Bad UTF8 Data"
+            }
+            print("Encoded foundation object: '\(newJSONDataString)'")
+        }
+
+        XCTAssertNotNil(jsonData)
+
+        if let jsonDataUW = jsonData {
+            //Decode
+            var jsonDict: [String: Any]? = nil
+            var jsonDictRef: [String: Any]? = nil
+            do {
+                let interJSONRep = try JSON.decode(jsonDataUW)
+                jsonDict = interJSONRep.foundation as? [String:Any]
+                jsonDictRef = try JSONSerialization.jsonObject(with: jsonDataUW, options: .allowFragments) as? [String:Any]
+            } catch {
+                print("Couldn't deserialize JSON from data due to error: \(error). (Data: \(jsonDataUW))")
+            }
+
+            let jsonDictString = String(describing: jsonDict)
+            let jsonDictRefString = String(describing: jsonDictRef)
+
+            if jsonDictString != jsonDictRefString {
+                print("New Dict Result:\n\(jsonDictString)\n\nReference Dict Result:\n\(jsonDictRefString)")
+                XCTFail()
+            }
+            else {
+                let jsonDictString = String(describing: jsonDict)
+                print("New Dict Result:\n\(jsonDictString)")
+            }
+        }
+
+
     }
 }
 

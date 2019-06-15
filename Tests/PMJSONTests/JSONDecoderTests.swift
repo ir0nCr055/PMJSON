@@ -19,7 +19,7 @@ import Foundation
 let bigJson: Data = {
     var s = "[\n"
     for _ in 0..<1000 {
-        s += "{ \"a\": true, \"b\": null, \"c\":3.1415, \"d\": \"Hello world\", \"e\": [1,2,3]},"
+        s += "{ \"a\": true, \"b\": null, \"c\":3.1415, \"d\": \"Hello world\", \"e\": [1,2,3], \"f\": 0, \"g\": 1},"
     }
     s += "{}]"
     return s.data(using: String.Encoding.utf8)!
@@ -53,7 +53,8 @@ public final class JSONDecoderTests: XCTestCase {
             ("testDepthLimit", testBOMDetection),
             ("testUnicodeHeuristicDetection", testUnicodeHeuristicDetection),
             ("testDecimalParsing", testDecimalParsing),
-            ("testJSONErrorNSErrorDescription", testJSONErrorNSErrorDescription)
+            ("testJSONErrorNSErrorDescription", testJSONErrorNSErrorDescription),
+            ("testOneAndZero", testOneAndZero)
         ]
         return tests
     }()
@@ -73,6 +74,27 @@ public final class JSONDecoderTests: XCTestCase {
         XCTAssertEqual(try JSON.decode("-5.4272823085455e-05"), -5.4272823085455e-05)
         XCTAssertEqual(try JSON.decode("-5.4272823085455e+05"), -5.4272823085455e+05)
         XCTAssertEqual(try JSON.decode("-5.4272823085455e+05", options: [.useDecimals]), JSON(Decimal(string: "-5.4272823085455e+05")!))
+    }
+
+    func testOneAndZero() {
+        XCTAssertEqual(try JSON.decode("0"), 0)
+        XCTAssertEqual(try JSON.decode("1"), 1)
+        XCTAssertEqual(try JSON.decode("{\"values\":{\"circumference\":0,\"volume\":0,\"size\":0}}"), ["values": ["circumference": 0, "volume": 0, "size": 0]])
+        XCTAssertEqual(try JSON.decode("{\"values\":{\"circumference\": 0,\"volume\": 0,\"size\": 0}}"), ["values": ["circumference": 0, "volume": 0, "size": 0]])
+
+        do {
+            let jsonObject = try JSON.decode("{\"values\":{\"circumference\": 1,\"volume\": 0,\"size\": 1, \"isTransparent\": true}}")
+            let foundationObject = jsonObject.foundation as? [String:Any]
+            print(String(describing: foundationObject))
+
+            let jsonObject2 = try JSON.decode("{\"values\":{\"circumference\":1,\"volume\":0,\"size\":1,\"isTransparent\":true}}")
+            let foundationObject2 = jsonObject.foundation as? [String:Any]
+            print(String(describing: foundationObject2))
+        } catch {
+            print(error)
+            XCTFail()
+        }
+
     }
     
     func testStringEscapes() {
@@ -322,7 +344,8 @@ public class JSONDecoderBenchmarks: XCTestCase {
         ("testDecodePerformanceCocoa", testDecodePerformanceCocoa),
         ("testDecodeSampleJSONPerformance", testDecodeSampleJSONPerformance),
         ("testDecodeSampleJSONDecimalPerformance", testDecodeSampleJSONDecimalPerformance),
-        ("testDecodeSampleJSONCocoaPerformance", testDecodeSampleJSONCocoaPerformance)
+        ("testDecodeSampleJSONCocoaPerformance", testDecodeSampleJSONCocoaPerformance),
+        ("testCompareFoundation", testCompareFoundation)
     ]
     
     #if os(iOS) || os(OSX) || os(watchOS) || os(tvOS)
@@ -339,6 +362,22 @@ public class JSONDecoderBenchmarks: XCTestCase {
         }
     }
     #endif
+
+    func testCompareFoundation() {
+        do {
+            let json = try JSON.decode(bigJson)
+            let jsonObj = json.foundation
+            let jsonObjectString = String(describing: jsonObj)
+            let found = try JSONSerialization.jsonObject(with: bigJson)
+            let foundString = String(describing: found)
+            XCTAssertEqual(jsonObjectString.count, foundString.count)
+            let found2 = try JSONSerialization.jsonObject(with: JSON.encodeAsData(json))
+            let found2String = String(describing: found2)
+            XCTAssertEqual(jsonObjectString.count, found2String.count)
+        } catch {
+            XCTFail(String(describing: error))
+        }
+    }
     
     func testDecodePerformance() {
         measure { [bigJson] in

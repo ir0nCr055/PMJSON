@@ -287,7 +287,7 @@ extension JSON {
     /// Converts a JSON-compatible Foundation object into a `JSON` value.
     /// - Throws: `JSONFoundationError` if the object is not JSON-compatible.
     public init(foundation: Any) throws {
-        let object = foundation as AnyObject
+        let object = foundation as Any
         switch object {
         case is NSNull:
             self = .null
